@@ -2,9 +2,13 @@ import requests
 import wordGen
 import random
 
+#TODO general optimization
+
 print('[RPGIO] Wait apporximately 15 seconds before the bot will start.')
 print('[RPGIO] You can disable these messages, only leaving error logs by editing config.json')
 print('[RPGIO] Loading lists..')
+
+#TODO move http requests to some .txt file.
 
 adjectives = requests.get('https://raw.githack.com/taikuukaits/SimpleWordlists/master/Wordlist-Adjectives-All.txt').text
 adjectives = adjectives.split('\n')
@@ -19,6 +23,28 @@ print('[RPGIO] Done!')
 def percentOf(percent, whole):
     """Get percent of a whole"""
     return int((float(f'0.{percent}'))*(whole))
+
+g_wall = ":green_square:"
+g_floor = ":black_large_square:"
+g_chest = ":package:"
+
+def generate_room(x=10, y=7, wall=g_wall, floor=g_floor):
+    grid = []
+    for i in range(0, y):           #filling the grid
+        grid.append([])
+        for k in range(0, x):
+            grid[i].append(floor)
+
+    for i in range(0, x):           #horizontal walls
+        grid[0][x-1] = wall
+        grid[y-1][x-1] = wall
+
+    for i in range(0, y):           #vertical walls
+        grid[i-1][0] = wall
+        grid[i-1][x-1] = wall
+
+    return grid
+
 
 class Entity:
     def __init__(self, name, protection, hp):
@@ -94,8 +120,9 @@ def randWeapon(factor):
 
 class Player(Entity):
     """Meta-entity representing the discord user currently playing."""
-    def __init__(self, name):
+    def __init__(self, name, emoji):
         self.name = name
+        self.look = emoji
         self.hp = 100
         self.inv = []
         self.equippedArmor = None
@@ -105,6 +132,7 @@ class Player(Entity):
         self.state = 1
         self.protection = 0
         self.equippedWeapon = None
+        self.pos = (5, 5)
 
     def addExp(self, amount):
         requiredExp = pow(self.level, 2)
@@ -131,13 +159,40 @@ class Enemy(Entity):
         self.protection = protection
         self.state = 1
 
-def fight(player, enemy):
-    while player.state and enemy.state:
-        try:
-            enemy.receiveDamage(player.equippedWeapon.dmg)
-            player.receiveDamage(enemy.damage)
-        except:
-            continue
+class Game:
+    #0 - nothing
+    #1 - dungeon
+    #2 - fight
+    def __init__(self, plr):
+        self.state = 0
+        self.plr = plr
 
-print(randWeapon(2).name)
+    def enterDungeon(self):
+        self.state = 1
+        self.current_dungeon = wordGen.genWord(2)
+        self.current_room = generate_room()
+        self.current_room[self.plr.pos[0]][self.plr.pos[1]] = self.plr.look
+        return (self.current_dungeon, self.current_room)
+
+    def listenRender(self, instruction):
+        if self.state == 1:
+            if instruction == 'up' and self.current_room[self.plr.pos[0] - 1][self.plr.pos[1]] == g_floor:
+                self.current_room[self.plr.pos[0]][self.plr.pos[1]] = g_floor
+                self.current_room[self.plr.pos[0] - 1][self.plr.pos[1]] = self.plr.look
+                self.plr.pos = (self.plr.look[0] - 1, self.plr.look[1])
+            elif instruction == 'down' and self.current_room[self.plr.pos[0] + 1][self.plr.pos[1]] == g_floor:
+                self.current_room[self.plr.pos[0]][self.plr.pos[1]] = g_floor
+                self.current_room[self.plr.pos[0] + 1][self.plr.pos[1]] = self.plr.look
+                self.plr.pos = (self.plr.look[0] + 1, self.plr.look[1])
+            elif instruction == 'right' and self.current_room[self.plr.pos[0]][self.plr.pos[1] + 1] == g_floor:
+                self.current_room[self.plr.pos[0]][self.plr.pos[1]] = g_floor
+                self.current_room[self.plr.pos[0]][self.plr.pos[1] + 1] = self.plr.look
+                self.plr.pos = (self.plr.look[0], self.plr.look[1] + 1)
+            elif instruction == 'left' and self.current_room[self.plr.pos[0]][self.plr.pos[1] - 1] == g_floor:
+                self.current_room[self.plr.pos[0]][self.plr.pos[1]] = g_floor
+                self.current_room[self.plr.pos[0]][self.plr.pos[1] - 1] = self.plr.look
+                self.plr.pos = (self.plr.look[0], self.plr.look[1] - 1)
+            
+            return self.current_room
+
 print('[RPGIO] Done loading game module')
